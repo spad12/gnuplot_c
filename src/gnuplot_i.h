@@ -112,6 +112,7 @@ typedef struct _GNUPLOT_CTRL_ {
 /*-------------------------------------------------------------------------*/
 char * gnuplot_get_program_path(char * pname);
 
+
 /*-------------------------------------------------------------------------*/
 /**
   @brief    Opens up a gnuplot session, ready to receive commands.
