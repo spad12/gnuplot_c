@@ -34,7 +34,7 @@
  ---------------------------------------------------------------------------*/
 
 /** Maximal size of a gnuplot command */
-#define GP_CMD_SIZE     	2048
+#define GP_CMD_SIZE     	20048
 /** Maximal size of a plot title */
 #define GP_TITLE_SIZE   	80
 /** Maximal size for an equation */
@@ -161,6 +161,8 @@ gnuplot_ctrl * gnuplot_init(void)
     handle->nplots = 0 ;
     gnuplot_setstyle(handle, "points") ;
     handle->ntmp = 0 ;
+
+    handle->nobj = 0;
 
     handle->gnucmd = popen("gnuplot", "w") ;
     if (handle->gnucmd == NULL) {
@@ -400,6 +402,9 @@ void gnuplot_plot_x(
     char    cmd[GP_CMD_SIZE] ;
     char    line[GP_CMD_SIZE] ;
 
+    int nmax = 512;
+    int dn = (n + nmax - 1)/nmax;
+
 
 	if (handle==NULL || d==NULL || (n<1)) return ;
 
@@ -422,7 +427,7 @@ void gnuplot_plot_x(
     strcpy(handle->to_delete[handle->ntmp], name) ;
     handle->ntmp ++ ;
     /* Write data to this file  */
-    for (i=0 ; i<n ; i++) {
+    for (i=0 ; i<n ; i+=dn) {
 		sprintf(line, "%g\n", d[i]);
 		write(tmpfd, line, strlen(line));
     }
@@ -436,7 +441,7 @@ void gnuplot_plot_x(
     }
     
     if (title == NULL) {
-        sprintf(line, "%s \"%s\" with %s", cmd, name, handle->pstyle) ;
+        sprintf(line, "%s \"%s\" with %s notitle", cmd, name, handle->pstyle) ;
     } else {
         sprintf(line, "%s \"%s\" title \"%s\" with %s", cmd, name,
                       title, handle->pstyle) ;
@@ -488,14 +493,16 @@ void gnuplot_plot_xy(
 	float			*	y,
     int                 n,
     char            *   title,
-    char				* extras
-)
+    char* extras)
 {
     int     i ;
 	int		tmpfd ;
     char    name[128] ;
     char    cmd[GP_CMD_SIZE] ;
     char    line[GP_CMD_SIZE] ;
+
+    int nmax = 512;
+    int dn = (n + nmax - 1)/nmax;
 
 	if (handle==NULL || x==NULL || y==NULL || (n<1)) return ;
 
@@ -518,7 +525,7 @@ void gnuplot_plot_xy(
     handle->ntmp ++ ;
 
     /* Write data to this file  */
-    for (i=0 ; i<n; i++) {
+    for (i=0 ; i<n; i+=dn) {
         sprintf(line, "%g %g\n", x[i], y[i]) ;
 		write(tmpfd, line, strlen(line));
     }
@@ -532,7 +539,7 @@ void gnuplot_plot_xy(
     }
     
     if (title == NULL) {
-        sprintf(line, "%s \"%s\" notitle with %s %s", cmd, name, handle->pstyle,extras) ;
+        sprintf(line, "%s \"%s\"  with %s notitle %s ", cmd, name, handle->pstyle,extras) ;
     } else {
         sprintf(line, "%s \"%s\" title \"%s\" with %s %s", cmd, name,
                       title, handle->pstyle,extras) ;
@@ -583,8 +590,7 @@ void gnuplot_plot_xy_circles(
 	float			*   radius,
     int                 n,
     char            *   title,
-    char				* extras
-)
+    char				* extras = "")
 {
     int     i ;
 	int		tmpfd ;
@@ -822,7 +828,8 @@ void gnuplot_plot_xyz(
 	float			*	x,
 	float			*	y,
 	float			*	z,
-    int                 n,
+    int                 nx,
+    int                 ny,
     char            *   title
 )
 {
@@ -832,7 +839,7 @@ void gnuplot_plot_xyz(
     char    cmd[GP_CMD_SIZE] ;
     char    line[GP_CMD_SIZE] ;
 
-	if (handle==NULL || x==NULL || y==NULL || (n<1)) return ;
+	if (handle==NULL || x==NULL || y==NULL || (nx<1) || (ny<1)) return ;
 
     /* Open one more temporary file? */
     if (handle->ntmp == GP_MAX_TMP_FILES - 1) {
@@ -853,8 +860,13 @@ void gnuplot_plot_xyz(
     handle->ntmp ++ ;
 
     /* Write data to this file  */
-    for (i=0 ; i<n; i++) {
-        sprintf(line, "%g %g %g\n", x[i], y[i], z[i]) ;
+    for (i=1 ; i<ny-1; i+=4) {
+    	for(int j=1;j<nx-1;j+=4)
+    	{
+    		sprintf(line, "%g %g %g\n", x[j], y[i], z[j+nx*i]) ;
+			write(tmpfd, line, strlen(line));
+    	}
+		sprintf(line, "\n") ;
 		write(tmpfd, line, strlen(line));
     }
     close(tmpfd) ;
@@ -863,15 +875,15 @@ void gnuplot_plot_xyz(
     if (handle->nplots > 0) {
         strcpy(cmd, "replot") ;
     } else {
-    	strcpy(cmd, "dgrid3d") ;
+    	//strcpy(cmd, "dgrid3d") ;
         strcpy(cmd, "splot") ;
     }
 
     if (title == NULL) {
         sprintf(line, "%s \"%s\" with %s", cmd, name, handle->pstyle) ;
     } else {
-        sprintf(line, "%s \"%s\" title \"%s\" with %s", cmd, name,
-                      title, handle->pstyle) ;
+        sprintf(line, "%s \"%s\" title \"%s\" with pm3d", cmd, name,
+                      title) ;
     }
 
     /* send command to gnuplot  */
@@ -879,3 +891,229 @@ void gnuplot_plot_xyz(
     handle->nplots++ ;
     return ;
 }
+
+
+void gnuplot_plot_rbgaimage(
+    gnuplot_ctrl    *   handle,
+	pixel			*	pixels,
+	int 				nx,
+    int               ny,
+    float			xmin,
+    float 			xmax,
+    float			ymin,
+    float 			ymax,
+    char            *   title
+)
+{
+    int     i ;
+	int		tmpfd ;
+    char    name[128] ;
+    char    cmd[GP_CMD_SIZE] ;
+    char    line[GP_CMD_SIZE] ;
+
+    float dx = (xmax-xmin)/nx;
+    float dy = (ymax-ymin)/ny;
+
+	if (handle==NULL || pixels==NULL ||  (nx<1) ||  (ny<1))return ;
+
+    /* Open one more temporary file? */
+    if (handle->ntmp == GP_MAX_TMP_FILES - 1) {
+        fprintf(stderr,
+                "maximum # of temporary files reached (%d): cannot open more",
+                GP_MAX_TMP_FILES) ;
+        return ;
+    }
+
+    /* Open temporary file for output   */
+	sprintf(name, "%s/gnuplot-i-XXXXXX", P_tmpdir);
+    if ((tmpfd=mkstemp(name))==-1) {
+        fprintf(stderr,"cannot create temporary file: exiting plot") ;
+        return ;
+    }
+    /* Store file name in array for future deletion */
+    strcpy(handle->to_delete[handle->ntmp], name) ;
+    handle->ntmp ++ ;
+
+    gnuplot_cmd(handle,"set xrange [%f:%f]",xmin,xmax);
+    gnuplot_cmd(handle,"set yrange [%f:%f]",ymin,ymax);
+    gnuplot_cmd(handle,"set size square");
+
+
+    /* Write data to this file  */
+    for (i=0 ; i<nx*ny; i++) {
+
+    	int ix = i%nx;
+    	int iy = i/nx;
+    	float xt = ix*dx+xmin;
+    	float yt = iy*dy+ymin;
+    	pixel my_pixel = pixels[i];
+
+        sprintf(line, "%g %g %i %i %i %i\n", xt, yt, my_pixel.r,my_pixel.g,my_pixel.b,my_pixel.a) ;
+		write(tmpfd, line, strlen(line));
+
+    }
+    close(tmpfd) ;
+
+    /* Command to be sent to gnuplot    */
+    if (handle->nplots > 0) {
+        strcpy(cmd, "replot") ;
+    } else {
+        strcpy(cmd, "plot") ;
+    }
+
+    if (title == NULL) {
+        sprintf(line, "%s \"%s\" with rgbalpha failsafe ", cmd, name) ;
+    } else {
+        sprintf(line, "%s \"%s\" title \"%s\" with rgbalpha", cmd, name,
+                      title) ;
+    }
+
+    /* send command to gnuplot  */
+    gnuplot_cmd(handle, line) ;
+    handle->nplots++ ;
+    return ;
+}
+
+
+void gnuplot_setup_cell(
+	gnuplot_ctrl	* 	handle,
+	cell	*				my_cell
+)
+{
+	handle->nobj += 1;
+
+	// Set the cell to be a polygon with the following vertices
+	gnuplot_cmd(handle,"set object %i polygon from "
+			"%f, %f to"
+			" %f, %f to"
+			" %f, %f to"
+			" %f, %f to"
+			" %f, %f",
+			handle->nobj,
+			my_cell->x[0],my_cell->y[0],
+			my_cell->x[1],my_cell->y[1],
+			my_cell->x[2],my_cell->y[2],
+			my_cell->x[3],my_cell->y[3],
+			my_cell->x[0],my_cell->y[0]);
+
+	// Set the line color
+	gnuplot_cmd(handle,"set object %i lw 1 front",handle->nobj);
+}
+
+void gnuplot_color_cell(
+	gnuplot_ctrl	* 	handle,
+	float 			 	value,
+	int					icell
+)
+{
+
+	// Set the line color
+	gnuplot_cmd(handle,"set object %i fillcolor palette frac %f "
+							"fillstyle solid border rgb \"black\" lw 1 front",icell,value);
+}
+
+/*-------------------------------------------------------------------------*/
+/**
+  @brief	Plot a 2d polygon from a list of points.
+  @param	handle		Gnuplot session control handle.
+  @param	x			Pointer to a list of x coordinates.
+  @param	y			Pointer to a list of y coordinates.
+  @param	n			Number of doubles in x (assumed the same as in y).
+  @param	title		Title of the plot.
+  @return	void
+
+  Plots out a 2d graph from a list of points. Provide points through a list
+  of x and a list of y coordinates. Both provided arrays are assumed to
+  contain the same number of values.
+
+  @code
+    gnuplot_ctrl    *h ;
+	quadralateral shapes[50] ;
+	float			color[50] ;
+    int             i ;
+
+    h = gnuplot_init() ;
+    for (i=0 ; i<50 ; i++) {
+        x[i] = (float)(i)/10.0 ;
+        y[i] = x[i] * x[i] ;
+    }
+    gnuplot_plot_xy(h, x, y, 50, "parabola") ;
+    sleep(2) ;
+    gnuplot_close(h) ;
+  @endcode
+ */
+/*--------------------------------------------------------------------------*/
+
+
+void gnuplot_setup_mesh(
+    gnuplot_ctrl    *   handle,
+    cell	 *			cells,
+    float	* 			xdims,
+    float	*			ydims,
+    int                 ncells
+)
+{
+
+	// Set pm3d so that our palette actually works
+	gnuplot_cmd(handle,"set pm3d");
+
+	// Set up the plot window dimensions
+	gnuplot_cmd(handle,"set xrange [%f:%f]",xdims[0],xdims[1]);
+	gnuplot_cmd(handle,"set yrange [%f:%f]",ydims[0],ydims[1]);
+
+
+	for(int i=0;i<ncells;i++)
+	{
+		gnuplot_setup_cell(handle,cells+i);
+	}
+
+	gnuplot_cmd(handle,"plot 1 lw 0");
+
+    return ;
+}
+
+void gnuplot_fill_mesh(
+		gnuplot_ctrl    *   handle,
+	    float			*		value,
+	    int                 ncells,
+	    float		minval = 0,
+	    float		maxval = 10
+	    )
+{
+	float bval = minval;
+	float gval = 0.3*(maxval-minval)+minval;
+	float yval = 0.6*(maxval-minval)+minval;
+	float rval = maxval;
+
+	// Set the color palette
+	gnuplot_cmd(handle,"set palette defined ( %f \"blue\", %f \"green\","
+			" %f \"yellow\", %f \"red\" )",bval,gval,yval,rval);
+
+
+	for(int i=0;i<ncells;i++)
+	{
+		float temp = (value[i]-minval)/(maxval-minval);
+		gnuplot_color_cell(handle,temp,i+1);
+	}
+
+	gnuplot_cmd(handle,"replot");
+
+	return;
+}
+
+void gnuplot_save_pdf(
+		gnuplot_ctrl*			handle,
+		char*					filename)
+{
+	char line[100];
+	gnuplot_cmd(handle,"set term pdf");
+
+	sprintf(line,"set output \"%s.pdf\"",filename);
+
+	gnuplot_cmd(handle,line);
+
+	gnuplot_cmd(handle,"replot");
+}
+
+
+

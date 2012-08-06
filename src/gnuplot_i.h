@@ -41,6 +41,11 @@
 /** Maximal size of a temporary file name */
 #define GP_TMP_NAME_SIZE    512
 
+typedef struct cell
+{
+	float x[4];
+	float y[4];
+}cell;
 
 /*---------------------------------------------------------------------------
                                 New Types
@@ -74,12 +79,18 @@ typedef struct _GNUPLOT_CTRL_ {
     char      to_delete[GP_MAX_TMP_FILES][GP_TMP_NAME_SIZE] ;
 	/** Number of temporary files */
     int       ntmp ;
+
+    /** Number of objects */
+    int nobj;
 } gnuplot_ctrl ;
 
 /*---------------------------------------------------------------------------
                         Function ANSI C prototypes
  ---------------------------------------------------------------------------*/
 
+typedef struct{
+	int r,b,g,a;
+}pixel;
 
 /*-------------------------------------------------------------------------*/
 /**
@@ -257,7 +268,7 @@ void gnuplot_resetplot(gnuplot_ctrl * h);
   @endcode
  */
 /*--------------------------------------------------------------------------*/
-void gnuplot_plot_x(gnuplot_ctrl * handle, float * d, int n, char * title);
+void gnuplot_plot_x(gnuplot_ctrl * handle, float * d, int n, char * title = NULL);
 
 /*-------------------------------------------------------------------------*/
 /**
@@ -295,9 +306,9 @@ void gnuplot_plot_xy(
     float          *   x,
     float          *   y,
     int                 n,
-    char            *   title,
-    char				* extras = ""
-) ;
+    char            *   title  = NULL,
+    char				* extras  = ""
+);
 
 /*-------------------------------------------------------------------------*/
 /**
@@ -337,7 +348,7 @@ void gnuplot_plot_xy_circles(
     float		  *   radius,
     int                 n,
     char            *   title,
-    char				* extras = ""
+    char				* extras
 ) ;
 
 
@@ -467,8 +478,52 @@ void gnuplot_plot_xyz(
     float          *   x,
     float          *   y,
     float 			  *   z,
-    int                 n,
+    int                 nx,
+    int					ny,
     char            *   title
 ) ;
+
+void gnuplot_plot_rbgaimage(
+    gnuplot_ctrl    *   handle,
+	pixel			*	pixels,
+	int 				nx,
+    int               ny,
+    float			xmin,
+    float 			xmax,
+    float			ymin,
+    float 			ymax,
+    char            *   title = ""
+);
+
+void gnuplot_setup_cell(
+	gnuplot_ctrl	* 	handle,
+	cell	*				my_cell
+);
+
+void gnuplot_color_cell(
+	gnuplot_ctrl	* 	handle,
+	float 			 	value,
+	int					icell
+);
+
+void gnuplot_setup_mesh(
+    gnuplot_ctrl    *   handle,
+    cell	 *			cells,
+    float	* 			xdims,
+    float	*			ydims,
+    int                 ncells
+);
+
+void gnuplot_fill_mesh(
+		gnuplot_ctrl    *   handle,
+	    float			*		value,
+	    int                 ncells,
+	    float		minval,
+	    float		maxval
+	    );
+
+void gnuplot_save_pdf(
+		gnuplot_ctrl*			handle,
+		char*					filename);
 
 #endif
